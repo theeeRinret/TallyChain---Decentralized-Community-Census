@@ -150,7 +150,27 @@
     )
 )
 
-(define-public (submit-demographics 
+(define-public (unstake-oracle (cluster-id uint))
+    (let
+        (
+            (caller tx-sender)
+            (oracle (unwrap! (map-get? cluster-oracles { cluster-id: cluster-id, oracle: caller }) ERR-NOT-ORACLE))
+            (cluster (unwrap! (map-get? clusters { cluster-id: cluster-id }) ERR-CLUSTER-NOT-FOUND))
+            (stake-amount (get stake oracle))
+        )
+        (asserts! (get active oracle) ERR-NOT-ORACLE)
+        (try! (as-contract (stx-transfer? stake-amount tx-sender caller)))
+        (map-delete cluster-oracles { cluster-id: cluster-id, oracle: caller })
+        (map-delete oracle-reputation { cluster-id: cluster-id, oracle: caller })
+        (map-set clusters
+            { cluster-id: cluster-id }
+            (merge cluster { oracle-count: (- (get oracle-count cluster) u1) })
+        )
+        (ok true)
+    )
+)
+
+(define-public (submit-demographics
     (cluster-id uint) 
     (age-range uint) 
     (gender uint) 
