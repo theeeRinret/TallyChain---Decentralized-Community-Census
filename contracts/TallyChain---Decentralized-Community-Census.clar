@@ -7,6 +7,7 @@
 (define-constant ERR-INSUFFICIENT-STAKE (err u106))
 (define-constant ERR-CLUSTER-NOT-FOUND (err u107))
 (define-constant ERR-INSUFFICIENT-REPUTATION (err u108))
+(define-constant ERR-CLUSTER-PAUSED (err u109))
 
 (define-constant REWARD-AMOUNT u100)
 (define-constant ORACLE-STAKE u1000)
@@ -26,7 +27,8 @@
         admin: principal,
         oracle-count: uint,
         active: bool,
-        total-submissions: uint
+        total-submissions: uint,
+        paused: bool
     }
 )
 
@@ -107,7 +109,8 @@
                 admin: caller,
                 oracle-count: u0,
                 active: true,
-                total-submissions: u0
+                total-submissions: u0,
+                paused: false
             }
         )
         (var-set total-clusters cluster-id)
@@ -122,6 +125,7 @@
             (cluster (unwrap! (map-get? clusters { cluster-id: cluster-id }) ERR-CLUSTER-NOT-FOUND))
         )
         (asserts! (get active cluster) ERR-INVALID-CLUSTER)
+        (asserts! (not (get paused cluster)) ERR-CLUSTER-PAUSED)
         (asserts! (>= (stx-get-balance caller) ORACLE-STAKE) ERR-INSUFFICIENT-STAKE)
         
         (try! (stx-transfer? ORACLE-STAKE caller (as-contract tx-sender)))
@@ -185,6 +189,7 @@
             (existing-submission (map-get? user-submissions { cluster-id: cluster-id, user: caller }))
         )
         (asserts! (get active cluster) ERR-INVALID-CLUSTER)
+        (asserts! (not (get paused cluster)) ERR-CLUSTER-PAUSED)
         (asserts! (is-none existing-submission) ERR-ALREADY-SUBMITTED)
         (asserts! (and (<= age-range u6) (<= gender u2) (<= income-range u5) 
                       (<= education u4) (<= employment u3)) ERR-INVALID-DEMOGRAPHIC)
@@ -313,6 +318,40 @@
             })
         )
         (ok final-score)
+    )
+)
+
+(define-public (pause-cluster (cluster-id uint))
+    (let
+        (
+            (caller tx-sender)
+            (cluster (unwrap! (map-get? clusters { cluster-id: cluster-id }) ERR-CLUSTER-NOT-FOUND))
+        )
+        (asserts! (is-eq caller (get admin cluster)) ERR-NOT-AUTHORIZED)
+        (asserts! (get active cluster) ERR-INVALID-CLUSTER)
+        (asserts! (not (get paused cluster)) ERR-CLUSTER-PAUSED)
+        (map-set clusters
+            { cluster-id: cluster-id }
+            (merge cluster { paused: true })
+        )
+        (ok true)
+    )
+)
+
+(define-public (resume-cluster (cluster-id uint))
+    (let
+        (
+            (caller tx-sender)
+            (cluster (unwrap! (map-get? clusters { cluster-id: cluster-id }) ERR-CLUSTER-NOT-FOUND))
+        )
+        (asserts! (is-eq caller (get admin cluster)) ERR-NOT-AUTHORIZED)
+        (asserts! (get active cluster) ERR-INVALID-CLUSTER)
+        (asserts! (get paused cluster) ERR-CLUSTER-PAUSED)
+        (map-set clusters
+            { cluster-id: cluster-id }
+            (merge cluster { paused: false })
+        )
+        (ok true)
     )
 )
 
